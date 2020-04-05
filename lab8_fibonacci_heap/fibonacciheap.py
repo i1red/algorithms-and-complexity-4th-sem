@@ -1,5 +1,4 @@
-import math
-from typing import *
+from utils.heap import *
 
 
 TKey = TypeVar('TKey')
@@ -30,8 +29,44 @@ class FibHeapNode:
 
         self.degree += 1
 
-class FibonacciHeap(Generic[TKey, TValue]):
+    def remove_child(self, child: 'FibHeapNode') -> None:
+        if child is child.right:
+            self.child = None
+        else:
+            child.left.right = child.right
+            child.right.left = child.left
+
+            if child is self.child:
+                self.child = child.left
+
+        child.parent = None
+        self.degree -= 1
+
+    def link_child(self, new_child: 'FibHeapNode') -> None:
+        self.add_child(new_child)
+        new_child.mark = False
+
+
+def next_node(node: FibHeapNode) -> FibHeapNode:
+    next_ = node.right
+    node.left = node.right = node
+    return next_
+
+
+def iter_circular_list(cur_node: FibHeapNode, extract_nodes: bool = True) -> Iterator[FibHeapNode]:
+    end_node = cur_node
+    while True:
+        nx_node = next_node(cur_node) if extract_nodes else cur_node.right
+        yield cur_node
+
+        if nx_node is end_node:
+            break
+        cur_node = nx_node
+
+
+class FibonacciHeap(Generic[TKey, TValue], HeapMixin):
     def __init__(self, init_list: Optional[Iterable[Tuple[TKey, TValue]]] = None) -> None:
+        super().__init__()
         self._min = None
         self._length = 0
 
@@ -44,7 +79,7 @@ class FibonacciHeap(Generic[TKey, TValue]):
 
     def insert(self, key: TKey, value: TValue) -> None:
         self._length += 1
-        self._insert_node(FibHeapNode(key, value))
+        self._insert_root(FibHeapNode(key, value))
 
     def extract_min(self) -> Tuple[TKey, TValue]:
         if self._min is None:
@@ -53,59 +88,81 @@ class FibonacciHeap(Generic[TKey, TValue]):
         self._length -= 1
 
         minimum = self._min
-        tmp = minimum.child
-
-        if tmp is not None:
-            while True:
-                tmp.parent = None
-                self._insert_node(tmp)
-
-                tmp = tmp.right
-                if tmp is minimum.child:
-                    break
-
-        self._delete_root(minimum)
-        if self._min is minimum.right:
-            self._consolidate()
+        self._make_node_link_invalid(minimum)
+        self._remove_root(minimum)
 
         return (minimum.key, minimum.value)
 
+    def get_minimum(self) -> Tuple[TKey, TValue]:
+        if self._min is None:
+            raise IndexError('Empty heap')
+
+        return (self._min.key, self._min.value)
+
+    def decrease_key(self, ref: ImmutableRef, new_key: TKey) -> bool:
+        if ref._heap is not self:
+            raise ValueError('Element does NOT belong to heap')
+
+        node = ref._node
+        if new_key > node.key:
+            return False
+
+        node.key = new_key
+        self._emerge_node(node, lambda x: x.parent.key > x.key)
+        return True
+
+    def remove(self, ref: ImmutableRef) -> None:
+        if ref._heap is not self:
+            raise ValueError('Element does NOT belong to heap')
+
+        self._length -= 1
+
+        node = ref._node
+        self._emerge_node(node, lambda x: True)
+        self._remove_root(node)
+
+        ref._node = ref._heap = None
+        del self._refs[id(node)]
+
+    def _get_node(self, index: int) -> FibHeapNode:
+        for cur_index, node in enumerate(self._iter_nodes()):
+            if cur_index == index:
+                return node
+
+    def _iter_nodes(self) -> Iterator[FibHeapNode]:
+        def recursive_traversal(cur_node: FibHeapNode) -> FibHeapNode:
+            for node in iter_circular_list(cur_node, extract_nodes=False):
+                if node.child is not None:
+                    yield from recursive_traversal(node.child)
+                yield node
+
+        if self._min is not None:
+            yield from recursive_traversal(self._min)
+
     def _consolidate(self) -> None:
-        nodes_by_degree = [None for _ in range(len(self) + 1)]
+        nodes_by_degree = {}
 
-        tmp = self._min
-        while True:
-            tmp_degree = tmp.degree
+        for node in iter_circular_list(self._min):
+            node_dgr = node.degree
 
-            while (other := nodes_by_degree[tmp_degree]) is not None:
-                if tmp.key > other.key:
-                    tmp, other = other, tmp
+            while node_dgr in nodes_by_degree:
+                other = nodes_by_degree[node_dgr]
+                if node.key > other.key:
+                    node, other = other, node
 
-                self._link(other, tmp)
-                nodes_by_degree[tmp_degree] = None
-                tmp_degree += 1
+                node.link_child(other)
+                del nodes_by_degree[node_dgr]
+                node_dgr += 1
 
-            nodes_by_degree[tmp_degree] = tmp
-
-            tmp = tmp.right
-            if tmp is self._min:
-                break
+            nodes_by_degree[node_dgr] = node
 
         self._min = None
 
-        for node in nodes_by_degree:
-            if node is not None:
-                # noinspection PyTypeChecker
-                self._insert_node(node)
+        for _, node in nodes_by_degree.items():
+            self._insert_root(node)
 
-    def _insert_node(self, node: FibHeapNode) -> None:
+    def _insert_root(self, node: FibHeapNode) -> None:
         if self._min is None:
-            self._min = node
-        elif self._min.key > node.key:
-            node.right, node.left = self._min.right, self._min
-
-            self._min.right.left = node
-            self._min.right = node
             self._min = node
         else:
             node.right, node.left = self._min, self._min.left
@@ -113,21 +170,50 @@ class FibonacciHeap(Generic[TKey, TValue]):
             self._min.left.right = node
             self._min.left = node
 
-    def _max_degree(self) -> int:
-        return int(math.log(len(self), (1 + math.sqrt(5)) / 2))
+            if self._min.key > node.key:
+                self._min = node
 
-    def _link(self, new_child: FibHeapNode, new_parent: FibHeapNode) -> None:
-        self._delete_root(new_child)
-        new_parent.add_child(new_child)
-        new_child.mark = False
-
-    def _delete_root(self, old_root: FibHeapNode) -> None:
-        if old_root is self._min and old_root.right is self._min:
+    def _extract_tree(self, tree_root: FibHeapNode) -> None:
+        """Extracts root with its children from heap"""
+        if tree_root is self._min and tree_root.right is self._min:
             self._min = None
         else:
-            old_root.left.right = old_root.right
-            old_root.right.left = old_root.left
+            tree_root.left.right = tree_root.right
+            tree_root.right.left = tree_root.left
 
-            if old_root is self._min:
+            if tree_root is self._min:
                 self._min = self._min.right
 
+    def _remove_root(self, old_root: FibHeapNode) -> None:
+        """Removes root and restores its children"""
+        child = old_root.child
+        self._extract_tree(old_root)
+
+        if child is not None:
+            for node in iter_circular_list(child):
+                node.parent = None
+                self._insert_root(node)
+
+        if self._min is not None:
+            self._consolidate()
+
+    def _emerge_node(self, node: FibHeapNode, condition: Callable[[FibHeapNode], bool]) -> None:
+        if (parent := node.parent) is not None and condition(node):
+            self._cut(node, parent)
+            self._cascading_cut(parent)
+
+        if node.key < self._min.key:
+            self._min = node
+
+    def _cut(self, node: FibHeapNode, parent: FibHeapNode) -> None:
+        parent.remove_child(node)
+        self._insert_root(node)
+        node.mark = False
+
+    def _cascading_cut(self, node: FibHeapNode) -> None:
+        if (parent := node.parent) is not None:
+            if not node.mark:
+                node.mark = True
+            else:
+                self._cut(node, parent)
+                self._cascading_cut(parent)
