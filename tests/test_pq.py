@@ -1,6 +1,6 @@
 import pytest
 import random
-from lab8x9_common.heapqueue import PriorityQueue
+from lab7x8_common.heapqueue import PriorityQueue
 
 BOUND = 1000
 DIF_PRIORITY_INPUT = [(random.randint(-BOUND, BOUND), random.randint(-BOUND, BOUND)) for _ in range(BOUND)]

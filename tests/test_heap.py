@@ -2,7 +2,7 @@ import pytest
 import random
 from lab8_fibonacci_heap.fibonacciheap import FibonacciHeap
 from lab7_binomial_heap.binomialheap import BinomialHeap
-from lab8x9_common.moveheaps import move_heaps
+from lab7x8_common.moveheaps import move_heaps
 
 
 BOUND = 1000

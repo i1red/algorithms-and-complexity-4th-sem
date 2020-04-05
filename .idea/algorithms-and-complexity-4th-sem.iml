@@ -14,7 +14,7 @@
       <sourceFolder url="file://$MODULE_DIR$/lab6_bx_tree" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/lab7_binomial_heap" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/lab8_fibonacci_heap" isTestSource="false" />
-      <sourceFolder url="file://$MODULE_DIR$/lab8x9_common" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/lab7x8_common" isTestSource="false" />
       <excludeFolder url="file://$MODULE_DIR$/venv" />
     </content>
     <orderEntry type="jdk" jdkName="Python 3.8" jdkType="Python SDK" />
