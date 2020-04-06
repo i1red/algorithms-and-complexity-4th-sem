@@ -12,6 +12,10 @@ Heap = TypeVar('Heap', FibonacciHeap, BinomialHeap)
 def _move_heap_refs(lt: HeapMixin, rt: HeapMixin, result: HeapMixin) -> None:
     result._refs.update(lt._refs)
     result._refs.update(rt._refs)
+
+    for _, ref in result._refs.items():
+        ref._heap = result
+
     lt._refs.clear()
     rt._refs.clear()
 
